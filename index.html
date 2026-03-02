@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TicTacToe Pro SVG v2</title>
+    <style>
+        :root {
+            --bg: #05070a;
+            --surface: #111827;
+            --accent-x: #00f2ff; /* Biru Neon */
+            --accent-o: #ff007b; /* Pink Neon */
+            --text: #e2e8f0;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            /* 👇 POIN UTAMA: Hilangkan overlay biru saat klik di mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Mencegah scroll yang tidak perlu */
+        }
+
+        /* Scoreboard */
+        .scoreboard {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 30px;
+            background: var(--surface);
+            padding: 15px 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .score-item { text-align: center; }
+        .score-val { font-size: 1.5rem; font-weight: bold; display: block; }
+        .score-label { font-size: 0.7rem; text-transform: uppercase; opacity: 0.6; letter-spacing: 1px; }
+
+        /* Board Styling */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 12px;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background: var(--surface);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s ease, background 0.2s ease;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .cell:hover {
+            background: #1f2937;
+        }
+        
+        /* Efek tekan kecil saat diklik */
+        .cell:active {
+            transform: scale(0.96);
+        }
+
+        /* SVG Animations */
+        svg {
+            width: 65px; /* Sedikit lebih besar */
+            height: 65px;
+            fill: none;
+            stroke-width: 9; /* Garis lebih tebal */
+            stroke-linecap: round;
+        }
+
+        /* X Animation */
+        .x-icon {
+            stroke: var(--accent-x);
+            filter: drop-shadow(0 0 8px var(--accent-x));
+        }
+        .x-icon .draw {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: drawX 0.35s ease-out forwards;
+        }
+
+        @keyframes drawX {
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* O Animation (Diperbaiki agar Lingkaran Penuh) */
+        .o-icon {
+            stroke: var(--accent-o);
+            filter: drop-shadow(0 0 8px var(--accent-o));
+        }
+        .o-icon .draw {
+            stroke-dasharray: 220; /* Keliling lingkaran penuh */
+            stroke-dashoffset: 220;
+            /* Pastikan durasinya cukup dan menutup */
+            animation: drawO 0.4s ease-out forwards;
+        }
+
+        @keyframes drawO {
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Kemenangan */
+        .cell.winner {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .cell.winner svg {
+            animation: pulseWinner 1s infinite alternate;
+        }
+        
+        @keyframes pulseWinner {
+            to { transform: scale(1.1); filter: drop-shadow(0 0 12px inherit); }
+        }
+
+        .reset-btn {
+            margin-top: 40px;
+            background: white;
+            color: black;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .reset-btn:hover {
+            opacity: 0.9;
+        }
+        .reset-btn:active {
+            transform: translateY(1px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scoreboard">
+        <div class="score-item">
+            <span class="score-label">X</span>
+            <span class="score-val" id="scoreX" style="color: var(--accent-x)">0</span>
+        </div>
+        <div class="score-item">
+            <span class="score-label">Seri</span>
+            <span class="score-val" id="scoreDraw">0</span>
+        </div>
+        <div class="score-item">
+            <span class="score-label">O</span>
+            <span class="score-val" id="scoreO" style="color: var(--accent-o)">0</span>
+        </div>
+    </div>
+
+    <div class="board" id="board">
+        </div>
+
+    <button class="reset-btn" onclick="resetBoard()">Reset Ronde</button>
+
+    <script>
+        const boardEl = document.getElementById('board');
+        let state = Array(9).fill(null);
+        let xTurn = true;
+        let gameActive = true;
+        let scores = { X: 0, O: 0, Draw: 0 };
+
+        // Template SVG yang diperbaiki
+        const svgX = `<svg class="x-icon" viewBox="0 0 100 100">
+            <path class="draw" d="M25,25 L75,75 M75,25 L25,75" />
+        </svg>`;
+        
+        // POIN UTAMA: Koordinat circle dipastikan presisi (cx, cy, r)
+        const svgO = `<svg class="o-icon" viewBox="0 0 100 100">
+            <circle class="draw" cx="50" cy="50" r="35" transform="rotate(-90 50 50)" />
+        </svg>`;
+
+        function init() {
+            boardEl.innerHTML = '';
+            state.forEach((_, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.addEventListener('click', () => handleClick(i, cell), { once: true });
+                boardEl.appendChild(cell);
+            });
+        }
+
+        function handleClick(i, cell) {
+            if (!gameActive) return;
+            
+            const currentPlayer = xTurn ? 'X' : 'O';
+            state[i] = currentPlayer;
+            cell.innerHTML = xTurn ? svgX : svgO;
+            
+            const winIndices = checkWinner();
+            if (winIndices) {
+                gameActive = false;
+                highlightWinner(winIndices);
+                scores[currentPlayer]++;
+                updateScoreboard();
+            } else if (!state.includes(null)) {
+                gameActive = false;
+                scores.Draw++;
+                updateScoreboard();
+            } else {
+                xTurn = !xTurn;
+            }
+        }
+
+        function checkWinner() {
+            const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for (let line of lines) {
+                const [a, b, c] = line;
+                if (state[a] && state[a] === state[b] && state[a] === state[c]) return line;
+            }
+            return null;
+        }
+
+        function highlightWinner(indices) {
+            const cells = document.querySelectorAll('.cell');
+            indices.forEach(i => cells[i].classList.add('winner'));
+        }
+
+        function updateScoreboard() {
+            document.getElementById('scoreX').innerText = scores.X;
+            document.getElementById('scoreO').innerText = scores.O;
+            document.getElementById('scoreDraw').innerText = scores.Draw;
+        }
+
+        function resetBoard() {
+            state = Array(9).fill(null);
+            xTurn = true;
+            gameActive = true;
+            init();
+        }
+
+        init();
+    </script>
+</body>
+</html>
